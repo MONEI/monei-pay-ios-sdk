@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = 'MoneiPaySDK'
-  s.version      = '0.2.0'
+  s.version      = '0.2.1'
   s.summary      = 'Accept NFC tap-to-pay payments via MONEI Pay'
   s.homepage     = 'https://github.com/MONEI/monei-pay-ios-sdk'
   s.license      = { type: 'MIT', file: 'LICENSE' }
