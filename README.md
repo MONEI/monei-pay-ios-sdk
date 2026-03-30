@@ -12,17 +12,29 @@ No special entitlements, certificates, or Apple approval needed — your app ope
 
 ## Installation
 
+Use the **[latest release](https://github.com/MONEI/monei-pay-ios-sdk/releases/latest)**. Git tags look like `v1.2.3`; SwiftPM and CocoaPods expect semver **without** the `v`. CocoaPods also lists the pod [here](https://cocoapods.org/pods/MoneiPaySDK).
+
 ### Swift Package Manager
 
-Add to your `Package.swift`:
+In Xcode: **File → Add Package Dependencies** → `https://github.com/MONEI/monei-pay-ios-sdk.git` → pick a rule tied to the version on the latest release (e.g. **Up to Next Major** from that version).
+
+In `Package.swift`, set `from:` to the semver from the latest release page:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/MONEI/monei-pay-ios-sdk.git", from: "0.2.0")
+    .package(url: "https://github.com/MONEI/monei-pay-ios-sdk.git", from: "X.Y.Z")
 ]
 ```
 
-Or in Xcode: **File → Add Package Dependencies** → paste `https://github.com/MONEI/monei-pay-ios-sdk.git`
+### CocoaPods
+
+In your `Podfile`:
+
+```ruby
+pod 'MoneiPaySDK'
+```
+
+Then run `pod install` (resolves the current release on [trunk](https://cocoapods.org/pods/MoneiPaySDK)).
 
 ## Setup
 
@@ -112,16 +124,16 @@ do {
 
 Accepts an NFC payment via MONEI Pay.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `token` | `String` | Yes | Raw JWT auth token (no "Bearer " prefix) |
-| `amount` | `Int` | Yes | Amount in cents |
-| `description` | `String?` | No | Payment description |
-| `customerName` | `String?` | No | Customer name |
-| `customerEmail` | `String?` | No | Customer email |
-| `customerPhone` | `String?` | No | Customer phone |
-| `callbackScheme` | `String` | Yes | Your app's registered URL scheme |
-| `timeout` | `TimeInterval?` | No | Timeout in seconds (default: 60) |
+| Parameter        | Type            | Required | Description                              |
+| ---------------- | --------------- | -------- | ---------------------------------------- |
+| `token`          | `String`        | Yes      | Raw JWT auth token (no "Bearer " prefix) |
+| `amount`         | `Int`           | Yes      | Amount in cents                          |
+| `description`    | `String?`       | No       | Payment description                      |
+| `customerName`   | `String?`       | No       | Customer name                            |
+| `customerEmail`  | `String?`       | No       | Customer email                           |
+| `customerPhone`  | `String?`       | No       | Customer phone                           |
+| `callbackScheme` | `String`        | Yes      | Your app's registered URL scheme         |
+| `timeout`        | `TimeInterval?` | No       | Timeout in seconds (default: 60)         |
 
 Returns `PaymentResult`. Throws `MoneiPayError`.
 
@@ -131,25 +143,25 @@ Handle incoming callback URL from MONEI Pay. Returns `true` if the URL was handl
 
 ### `PaymentResult`
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `transactionId` | `String` | Unique transaction ID |
-| `success` | `Bool` | Whether payment was approved |
-| `amount` | `Int?` | Amount in cents |
-| `cardBrand` | `String?` | Card brand (visa, mastercard, etc.) |
-| `maskedCardNumber` | `String?` | Masked card number (****1234) |
+| Property           | Type      | Description                         |
+| ------------------ | --------- | ----------------------------------- |
+| `transactionId`    | `String`  | Unique transaction ID               |
+| `success`          | `Bool`    | Whether payment was approved        |
+| `amount`           | `Int?`    | Amount in cents                     |
+| `cardBrand`        | `String?` | Card brand (visa, mastercard, etc.) |
+| `maskedCardNumber` | `String?` | Masked card number (****1234)       |
 
 ### `MoneiPayError`
 
-| Case | Description |
-|------|-------------|
-| `.moneiPayNotInstalled` | MONEI Pay not on device |
-| `.paymentInProgress` | Another payment is active |
-| `.paymentTimeout` | Callback not received in time |
-| `.paymentCancelled` | User cancelled |
-| `.paymentFailed(reason:)` | Payment declined/failed |
-| `.invalidParameters(_)` | Invalid input parameters |
-| `.failedToOpen` | Could not open MONEI Pay |
+| Case                      | Description                   |
+| ------------------------- | ----------------------------- |
+| `.moneiPayNotInstalled`   | MONEI Pay not on device       |
+| `.paymentInProgress`      | Another payment is active     |
+| `.paymentTimeout`         | Callback not received in time |
+| `.paymentCancelled`       | User cancelled                |
+| `.paymentFailed(reason:)` | Payment declined/failed       |
+| `.invalidParameters(_)`   | Invalid input parameters      |
+| `.failedToOpen`           | Could not open MONEI Pay      |
 
 ## Example App
 
@@ -176,6 +188,10 @@ curl -X POST https://api.monei.com/v1/pos/auth-token \
 ```
 
 See the [MONEI API docs](https://docs.monei.com) for details.
+
+## Development
+
+Maintainers: clone the repo, install Node dependencies with [pnpm](https://pnpm.io) (`pnpm install`), then use `swift build` / `swift test`. Git commits are checked with [commitlint](https://commitlint.js.org/) via a [Husky](https://typicode.github.io/husky/) `commit-msg` hook. Releases use [release-it](https://github.com/release-it/release-it) (`pnpm run release`): it bumps the version, updates the changelog and `MoneiPaySDK.podspec`, creates a Git tag and GitHub release. Publishing to the CocoaPods trunk runs in CI when that release is published.
 
 ## License
 
