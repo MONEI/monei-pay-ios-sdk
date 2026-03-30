@@ -11,12 +11,14 @@
   "license": "MIT",
   "scripts": {
     "release": "release-it",
-    "commitlint": "commitlint --edit"
+    "commitlint": "commitlint --edit",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@release-it/conventional-changelog": "^10.0.6",
+    "husky": "^9.1.7",
     "release-it": "^19.2.4"
   }
 }
