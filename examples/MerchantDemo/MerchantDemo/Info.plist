@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Register the merchant-demo:// URL scheme so MONEI Pay can call back with payment results -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>merchant-demo</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.monei.merchant-demo</string>
+		</dict>
+	</array>
+
+	<!-- Required for canOpenURL to check if MONEI Pay is installed -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>monei-pay</string>
+	</array>
+</dict>
+</plist>

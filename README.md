@@ -151,6 +151,20 @@ Handle incoming callback URL from MONEI Pay. Returns `true` if the URL was handl
 | `.invalidParameters(_)` | Invalid input parameters |
 | `.failedToOpen` | Could not open MONEI Pay |
 
+## Example App
+
+The [`examples/MerchantDemo`](examples/MerchantDemo) directory contains a minimal SwiftUI app demonstrating the full integration flow: enter an API key, fetch a POS auth token, and accept an NFC payment via MONEI Pay.
+
+To run:
+
+1. Open `examples/MerchantDemo/MerchantDemo.xcodeproj` in Xcode
+2. Set your Apple Development Team in **Signing & Capabilities**
+3. Build and run on a device with MONEI Pay installed
+
+The demo references the SDK as a local Swift package (`../../`), so any local SDK changes are picked up immediately.
+
+> **Beta:** MONEI Pay for iOS is currently in beta. Join via [TestFlight](https://testflight.apple.com/join/kZU2j445).
+
 ## Token Generation
 
 Your backend generates POS auth tokens via the MONEI API:
