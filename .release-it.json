@@ -6,11 +6,12 @@
   "github": {
     "release": true
   },
-  "npm": {
-    "publish": false
-  },
+  "npm": false,
   "hooks": {
-    "before:init": ["swift test"]
+    "before:init": ["swift test"],
+    "after:bump": [
+      "sed -i '' \"s/s.version.*=.*/s.version      = '${version}'/\" MoneiPaySDK.podspec"
+    ]
   },
   "plugins": {
     "@release-it/conventional-changelog": {
