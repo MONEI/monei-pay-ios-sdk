@@ -4,9 +4,15 @@ import MoneiPaySDK
 // MARK: - Content View
 // Single-screen UI: enter API key + POS ID, fetch token, accept payment.
 
+private let defaultUserAgent = "MONEI/MerchantDemoIOS/0.2.0"
+
 struct ContentView: View {
     /// MONEI API key (from dashboard)
     @State private var apiKey: String = ""
+    /// MONEI Account ID (optional, set when calling on behalf of a sub-account with a master account API key)
+    @State private var accountId: String = ""
+    /// Custom User-Agent (optional, identifies the partner / integration)
+    @State private var userAgent: String = ""
     /// Point of Sale ID (optional — account's default card present provider used if empty)
     @State private var posId: String = ""
     /// Raw JWT auth token (fetched from API or pasted manually)
@@ -33,6 +39,14 @@ struct ContentView: View {
                         .font(.system(.caption, design: .monospaced))
                         .autocapitalization(.none)
                         .autocorrectionDisabled()
+                    TextField("MONEI Account ID (optional, partner)", text: $accountId)
+                        .font(.system(.caption, design: .monospaced))
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                    TextField("User-Agent (e.g. MONEI/MyPartner/0.1.0)", text: $userAgent)
+                        .font(.system(.caption, design: .monospaced))
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
                     TextField("Point of Sale ID (optional)", text: $posId)
                         .font(.system(.caption, design: .monospaced))
                         .autocapitalization(.none)
@@ -48,7 +62,7 @@ struct ContentView: View {
                 } header: {
                     Text("Credentials")
                 } footer: {
-                    Text("Enter your MONEI API key. Point of Sale ID is optional — leave empty to use the account's default card present provider.")
+                    Text("Enter your MONEI API key. Set Account ID only when using a master account API key on behalf of a sub-account. Point of Sale ID is optional.")
                 }
 
                 // MARK: Auth Token (auto-filled or manual)
@@ -140,6 +154,13 @@ struct ContentView: View {
     /// Fetch POS auth token from MONEI API using the API key.
     private func fetchToken() {
         errorMessage = nil
+
+        if !accountId.isEmpty && userAgent.isEmpty {
+            errorMessage = "User-Agent must be provided when using Account ID"
+            return
+        }
+
+        let effectiveUserAgent = userAgent.isEmpty ? defaultUserAgent : userAgent
         isFetchingToken = true
 
         Task {
@@ -149,6 +170,10 @@ struct ContentView: View {
                 request.httpMethod = "POST"
                 request.setValue(apiKey, forHTTPHeaderField: "Authorization")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue(effectiveUserAgent, forHTTPHeaderField: "User-Agent")
+                if !accountId.isEmpty {
+                    request.setValue(accountId, forHTTPHeaderField: "MONEI-Account-ID")
+                }
 
                 var body: [String: String] = [:]
                 if !posId.isEmpty { body["pointOfSaleId"] = posId }
