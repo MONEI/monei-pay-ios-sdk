@@ -63,7 +63,7 @@ In your app's `Info.plist`, register a custom URL scheme (e.g. your bundle ID):
 </array>
 ```
 
-### 3. Wire the callback handler
+### 3. Wire the complete-redirect handler
 
 **SwiftUI:**
 
@@ -74,7 +74,7 @@ struct MyApp: App {
         WindowGroup {
             ContentView()
                 .onOpenURL { url in
-                    MoneiPay.handleCallback(url: url)
+                    MoneiPay.handleCompleteRedirect(url: url)
                 }
         }
     }
@@ -85,11 +85,16 @@ struct MyApp: App {
 
 ```swift
 func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-    return MoneiPay.handleCallback(url: url)
+    return MoneiPay.handleCompleteRedirect(url: url)
 }
 ```
 
 ## Usage
+
+Two complementary result channels:
+
+- `completeScheme` — your app's URL scheme. MONEI Pay opens `<completeScheme>://payment-result?...` on completion. UX-only, untrusted; use for navigation/UI.
+- `callbackUrl` (optional) — HTTPS endpoint on your backend. MONEI fires a signed webhook (`MONEI-Signature` HMAC). Use for fulfillment, accounting, anything irreversible.
 
 ```swift
 import MoneiPaySDK
@@ -102,7 +107,8 @@ do {
         customerName: "John Doe",     // Optional
         customerEmail: "john@ex.com", // Optional
         customerPhone: "+34600000000",// Optional
-        callbackScheme: "my-merchant-app"  // Your registered URL scheme
+        callbackUrl: "https://merchant.example.com/webhook/monei", // Optional, signed webhook
+        completeScheme: "my-merchant-app"  // Your registered URL scheme
     )
 
     print("Payment approved: \(result.transactionId)")
@@ -124,22 +130,23 @@ do {
 
 Accepts an NFC payment via MONEI Pay.
 
-| Parameter        | Type            | Required | Description                              |
-| ---------------- | --------------- | -------- | ---------------------------------------- |
-| `token`          | `String`        | Yes      | Raw JWT auth token (no "Bearer " prefix) |
-| `amount`         | `Int`           | Yes      | Amount in cents                          |
-| `description`    | `String?`       | No       | Payment description                      |
-| `customerName`   | `String?`       | No       | Customer name                            |
-| `customerEmail`  | `String?`       | No       | Customer email                           |
-| `customerPhone`  | `String?`       | No       | Customer phone                           |
-| `callbackScheme` | `String`        | Yes      | Your app's registered URL scheme         |
-| `timeout`        | `TimeInterval?` | No       | Timeout in seconds (default: 60)         |
+| Parameter        | Type            | Required | Description                                                                                  |
+| ---------------- | --------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `token`          | `String`        | Yes      | Raw JWT auth token (no "Bearer " prefix)                                                     |
+| `amount`         | `Int`           | Yes      | Amount in cents                                                                              |
+| `description`    | `String?`       | No       | Payment description                                                                          |
+| `customerName`   | `String?`       | No       | Customer name                                                                                |
+| `customerEmail`  | `String?`       | No       | Customer email                                                                               |
+| `customerPhone`  | `String?`       | No       | Customer phone                                                                               |
+| `callbackUrl`    | `String?`       | No       | HTTPS endpoint for the signed webhook. Trusted channel — use for fulfillment.                |
+| `completeScheme` | `String`        | Yes      | Your app's registered URL scheme. MONEI Pay opens `<completeScheme>://payment-result` on end |
+| `timeout`        | `TimeInterval?` | No       | Timeout in seconds (default: 60)                                                             |
 
 Returns `PaymentResult`. Throws `MoneiPayError`.
 
-### `MoneiPay.handleCallback(url:)`
+### `MoneiPay.handleCompleteRedirect(url:)`
 
-Handle incoming callback URL from MONEI Pay. Returns `true` if the URL was handled.
+Handle incoming complete-redirect URL from MONEI Pay. Returns `true` if the URL was handled.
 
 ### `PaymentResult`
 
@@ -153,15 +160,19 @@ Handle incoming callback URL from MONEI Pay. Returns `true` if the URL was handl
 
 ### `MoneiPayError`
 
-| Case                      | Description                   |
-| ------------------------- | ----------------------------- |
-| `.moneiPayNotInstalled`   | MONEI Pay not on device       |
-| `.paymentInProgress`      | Another payment is active     |
-| `.paymentTimeout`         | Callback not received in time |
-| `.paymentCancelled`       | User cancelled                |
-| `.paymentFailed(reason:)` | Payment declined/failed       |
-| `.invalidParameters(_)`   | Invalid input parameters      |
-| `.failedToOpen`           | Could not open MONEI Pay      |
+| Case                      | Description                                       |
+| ------------------------- | ------------------------------------------------- |
+| `.moneiPayNotInstalled`   | MONEI Pay not on device                           |
+| `.paymentInProgress`      | Another payment is active                         |
+| `.paymentTimeout`         | Callback not received in time                     |
+| `.paymentCancelled`       | User cancelled                                    |
+| `.paymentFailed(reason:)` | Payment declined or failed                        |
+| `.invalidParameters(_)`   | Invalid input parameters (also `INVALID_AMOUNT`, `INVALID_CALLBACK_URL`, `INVALID_COMPLETE_URL`) |
+| `.failedToOpen`           | Could not open MONEI Pay                          |
+| `.tokenExpired`           | Auth token expired — fetch fresh token and retry  |
+| `.invalidToken`           | Auth token rejected                               |
+| `.notAuthenticated`       | No signed-in session and no `auth_token` supplied |
+| `.accountNotConfigured`   | Account is not set up for card-present payments  |
 
 ## Example App
 

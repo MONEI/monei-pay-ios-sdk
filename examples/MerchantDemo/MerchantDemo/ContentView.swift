@@ -4,7 +4,7 @@ import MoneiPaySDK
 // MARK: - Content View
 // Single-screen UI: enter API key + POS ID, fetch token, accept payment.
 
-private let defaultUserAgent = "MONEI/MerchantDemoIOS/0.2.0"
+private let defaultUserAgent = "MONEI/MerchantDemoIOS/1.0.0"
 
 struct ContentView: View {
     /// MONEI API key (from dashboard)
@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var authToken: String = ""
     /// Amount in cents (e.g. 1500 = 15.00 EUR)
     @State private var amountText: String = ""
+    /// Optional HTTPS endpoint for the signed webhook (trusted channel)
+    @State private var callbackUrl: String = ""
     /// Whether MONEI Pay is installed on this device
     @State private var isMoneiPayInstalled: Bool = true
     /// Payment result from the SDK
@@ -89,6 +91,12 @@ struct ContentView: View {
                     TextField("Amount in cents (e.g. 1500 = 15.00 EUR)", text: $amountText)
                         .keyboardType(.numberPad)
 
+                    TextField("Webhook URL (optional, https://...)", text: $callbackUrl)
+                        .font(.system(.caption, design: .monospaced))
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+
                     Button(action: acceptPayment) {
                         if isProcessing {
                             ProgressView()
@@ -103,6 +111,8 @@ struct ContentView: View {
                     if !isMoneiPayInstalled {
                         Text("MONEI Pay is not installed. Install it from the App Store to accept NFC payments.")
                             .foregroundStyle(.red)
+                    } else {
+                        Text("Set a webhook URL to receive the trusted, signed payment result on your backend. The on-device callback is UX only.")
                     }
                 }
 
@@ -216,7 +226,8 @@ struct ContentView: View {
                 let result = try await MoneiPay.acceptPayment(
                     token: authToken,
                     amount: amount,
-                    callbackScheme: "merchant-demo"
+                    callbackUrl: callbackUrl.isEmpty ? nil : callbackUrl,
+                    completeScheme: "merchant-demo"
                 )
                 paymentResult = result
             } catch {

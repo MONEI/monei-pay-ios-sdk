@@ -23,6 +23,18 @@ public enum MoneiPayError: LocalizedError, Sendable {
     /// Failed to open MONEI Pay URL.
     case failedToOpen
 
+    /// The auth token has expired. Fetch a fresh token from your backend and retry.
+    case tokenExpired
+
+    /// The auth token is invalid or malformed.
+    case invalidToken
+
+    /// The user is not authenticated in MONEI Pay (no signed-in session and no auth_token supplied).
+    case notAuthenticated
+
+    /// The MONEI Pay account is not configured for card-present payments.
+    case accountNotConfigured
+
     public var errorDescription: String? {
         switch self {
         case .moneiPayNotInstalled:
@@ -42,6 +54,14 @@ public enum MoneiPayError: LocalizedError, Sendable {
             return "Invalid parameters: \(message)"
         case .failedToOpen:
             return "Failed to open MONEI Pay."
+        case .tokenExpired:
+            return "Auth token expired. Fetch a fresh token and retry."
+        case .invalidToken:
+            return "Auth token is invalid."
+        case .notAuthenticated:
+            return "Not authenticated in MONEI Pay."
+        case .accountNotConfigured:
+            return "MONEI Pay account is not configured for card-present payments."
         }
     }
 }

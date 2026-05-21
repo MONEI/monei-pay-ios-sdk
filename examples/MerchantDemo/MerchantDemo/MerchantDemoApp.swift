@@ -10,9 +10,9 @@ struct MerchantDemoApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                // Wire SDK callback handler — this resumes the pending acceptPayment() call
+                // Wire SDK complete-redirect handler — this resumes the pending acceptPayment() call
                 .onOpenURL { url in
-                    MoneiPay.handleCallback(url: url)
+                    MoneiPay.handleCompleteRedirect(url: url)
                 }
         }
     }

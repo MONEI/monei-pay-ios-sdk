@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.0](https://github.com/MONEI/monei-pay-ios-sdk/compare/v0.2.3...v1.0.0) (2026-05-21)
+
+
+### BREAKING CHANGES
+
+* `MoneiPay.acceptPayment(...)` — parameter `callbackScheme` is now `completeScheme`. Migrate by renaming the argument label at every call site.
+* `MoneiPay.handleCallback(url:)` is now `MoneiPay.handleCompleteRedirect(url:)`. Update your `.onOpenURL { ... }` / `application(_:open:options:)` hook.
+* Deep-link wire format: the SDK now emits `complete_url` (was `callback`) and the new optional `callback_url` query items when building the MONEI Pay URL.
+
+
+### Features
+
+* add `callbackUrl: String?` to `acceptPayment(...)` — strict HTTPS endpoint for the trusted signed webhook channel (HMAC `MONEI-Signature`). Pair this with `completeScheme` for production: webhook = trusted fulfillment, complete-redirect = UX only.
+* expand `MoneiPayError` to cover the full set of error codes returned by the MONEI Pay app: `tokenExpired`, `invalidToken`, `notAuthenticated`, `accountNotConfigured`, plus typed mapping for `INVALID_AMOUNT`, `INVALID_CALLBACK_URL`, `INVALID_COMPLETE_URL` via `invalidParameters`.
+
 ## [0.2.3](https://github.com/MONEI/monei-pay-ios-sdk/compare/v0.2.2...v0.2.3) (2026-05-13)
 
 

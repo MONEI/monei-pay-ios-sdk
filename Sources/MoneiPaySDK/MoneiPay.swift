@@ -5,16 +5,28 @@ import UIKit
 
 /// MONEI Pay SDK for accepting NFC payments via the MONEI Pay app.
 ///
+/// Two complementary result channels:
+///
+/// - `completeScheme`: your app's URL scheme. MONEI Pay opens
+///   `<completeScheme>://payment-result?...` when the flow finishes (success,
+///   cancel, or error). This is the **UX redirect** — fast, client-side, NOT
+///   cryptographically trusted. Use it to drive UI, never order fulfillment.
+/// - `callbackUrl` (optional): an HTTPS endpoint on your backend. MONEI fires
+///   a signed webhook (HMAC `MONEI-Signature`) here on payment completion.
+///   This is the **trusted** channel — use it for fulfillment, accounting,
+///   anything irreversible. Pair both for production.
+///
 /// Usage:
 /// ```swift
 /// let result = try await MoneiPay.acceptPayment(
 ///     token: "eyJ...",
 ///     amount: 1500,
-///     callbackScheme: "my-merchant-app"
+///     callbackUrl: "https://merchant.example.com/webhook/monei",
+///     completeScheme: "my-merchant-app"
 /// )
 /// ```
 ///
-/// You must also wire `MoneiPay.handleCallback(url:)` in your app's URL handler.
+/// You must also wire `MoneiPay.handleCompleteRedirect(url:)` in your app's URL handler.
 public final class MoneiPay: @unchecked Sendable {
 
     /// Default timeout in seconds for waiting for MONEI Pay callback.
@@ -47,7 +59,10 @@ public final class MoneiPay: @unchecked Sendable {
     ///   - customerName: Optional customer name.
     ///   - customerEmail: Optional customer email.
     ///   - customerPhone: Optional customer phone.
-    ///   - callbackScheme: Your app's registered URL scheme (e.g. "my-merchant-app").
+    ///   - callbackUrl: Optional HTTPS endpoint for the signed webhook on payment completion.
+    ///     Must be `https://`, max 2048 chars. This is the trusted channel — use it for fulfillment.
+    ///   - completeScheme: Your app's registered URL scheme (e.g. "my-merchant-app").
+    ///     MONEI Pay opens `<completeScheme>://payment-result` when the flow ends. UX-only, untrusted.
     ///   - timeout: Timeout in seconds (default: 60). Uses wall-clock time, not Task.sleep.
     /// - Returns: A `PaymentResult` with transaction details.
     /// - Throws: `MoneiPayError` on failure.
@@ -58,7 +73,8 @@ public final class MoneiPay: @unchecked Sendable {
         customerName: String? = nil,
         customerEmail: String? = nil,
         customerPhone: String? = nil,
-        callbackScheme: String,
+        callbackUrl: String? = nil,
+        completeScheme: String,
         timeout: TimeInterval? = nil
     ) async throws -> PaymentResult {
         // Validate parameters
@@ -68,8 +84,13 @@ public final class MoneiPay: @unchecked Sendable {
         guard !token.isEmpty else {
             throw MoneiPayError.invalidParameters("token must not be empty")
         }
-        guard !callbackScheme.isEmpty else {
-            throw MoneiPayError.invalidParameters("callbackScheme must not be empty")
+        guard !completeScheme.isEmpty else {
+            throw MoneiPayError.invalidParameters("completeScheme must not be empty")
+        }
+        if let callbackUrl {
+            guard isValidCallbackUrl(callbackUrl) else {
+                throw MoneiPayError.invalidParameters("callbackUrl must be https:// and <= 2048 chars")
+            }
         }
 
         // Guard against concurrent calls
@@ -96,7 +117,8 @@ public final class MoneiPay: @unchecked Sendable {
             customerName: customerName,
             customerEmail: customerEmail,
             customerPhone: customerPhone,
-            callbackScheme: callbackScheme
+            callbackUrl: callbackUrl,
+            completeScheme: completeScheme
         ) else {
             throw MoneiPayError.invalidParameters("Failed to build payment URL")
         }
@@ -131,26 +153,26 @@ public final class MoneiPay: @unchecked Sendable {
         }
     }
 
-    /// Handle a callback URL from MONEI Pay.
+    /// Handle a complete-redirect URL from MONEI Pay.
     ///
     /// Wire this into your SwiftUI app:
     /// ```swift
     /// .onOpenURL { url in
-    ///     MoneiPay.handleCallback(url: url)
+    ///     MoneiPay.handleCompleteRedirect(url: url)
     /// }
     /// ```
     ///
     /// Or in UIKit AppDelegate:
     /// ```swift
     /// func application(_ app: UIApplication, open url: URL, options: ...) -> Bool {
-    ///     return MoneiPay.handleCallback(url: url)
+    ///     return MoneiPay.handleCompleteRedirect(url: url)
     /// }
     /// ```
     ///
     /// - Parameter url: The incoming URL.
     /// - Returns: `true` if the URL was handled by the SDK.
     @discardableResult
-    public static func handleCallback(url: URL) -> Bool {
+    public static func handleCompleteRedirect(url: URL) -> Bool {
         lock.lock()
         guard pendingContinuation != nil else {
             lock.unlock()
@@ -168,11 +190,7 @@ public final class MoneiPay: @unchecked Sendable {
 
         if params["success"] == "false" {
             let errorReason = params["error"]
-            if errorReason == "CANCELLED" || errorReason == "USER_CANCELLED" {
-                resumePendingContinuation(with: .failure(MoneiPayError.paymentCancelled))
-            } else {
-                resumePendingContinuation(with: .failure(MoneiPayError.paymentFailed(reason: errorReason)))
-            }
+            resumePendingContinuation(with: .failure(mapErrorCode(errorReason)))
             return true
         }
 
@@ -194,6 +212,45 @@ public final class MoneiPay: @unchecked Sendable {
 
     // MARK: - Internal Helpers
 
+    /// Map a `?error=...` code from the complete redirect URL to a typed `MoneiPayError`.
+    /// Codes mirror the set emitted by the monei-pay app's deep-link error path.
+    static func mapErrorCode(_ code: String?) -> MoneiPayError {
+        switch code {
+        case "CANCELLED", "USER_CANCELLED":
+            return .paymentCancelled
+        case "TOKEN_EXPIRED":
+            return .tokenExpired
+        case "INVALID_TOKEN":
+            return .invalidToken
+        case "INVALID_AMOUNT":
+            return .invalidParameters("Invalid amount")
+        case "INVALID_CALLBACK_URL":
+            return .invalidParameters("Invalid callback_url (must be https and not a private IP)")
+        case "INVALID_COMPLETE_URL":
+            return .invalidParameters("Invalid complete_url (blocked scheme or malformed)")
+        case "INVALID_CALLBACK":
+            // Legacy code from app versions before v3.0. Should not appear with SDK >= 1.0.
+            return .invalidParameters("Invalid callback (legacy)")
+        case "NOT_AUTHENTICATED":
+            return .notAuthenticated
+        case "ACCOUNT_NOT_CONFIGURED":
+            return .accountNotConfigured
+        case "PAYMENT_FAILED":
+            return .paymentFailed(reason: nil)
+        default:
+            return .paymentFailed(reason: code)
+        }
+    }
+
+    /// Validate a `callbackUrl` value: must be `https://` and ≤ 2048 chars.
+    /// Sanity-check only. The real defense is server-side in mcc-service/payments-service.
+    /// Must mirror lib/deep-link-utils.ts isValidCallbackUrl in the monei-pay app — keep in sync.
+    static func isValidCallbackUrl(_ url: String) -> Bool {
+        guard url.count <= 2048 else { return false }
+        guard URL(string: url) != nil else { return false }
+        return url.lowercased().hasPrefix("https://")
+    }
+
     /// Build the MONEI Pay deep link URL.
     static func buildPaymentURL(
         token: String,
@@ -202,7 +259,8 @@ public final class MoneiPay: @unchecked Sendable {
         customerName: String? = nil,
         customerEmail: String? = nil,
         customerPhone: String? = nil,
-        callbackScheme: String
+        callbackUrl: String? = nil,
+        completeScheme: String
     ) -> URL? {
         var components = URLComponents()
         components.scheme = moneiPayScheme
@@ -211,9 +269,12 @@ public final class MoneiPay: @unchecked Sendable {
         var queryItems = [
             URLQueryItem(name: "amount", value: String(amount)),
             URLQueryItem(name: "auth_token", value: token),
-            URLQueryItem(name: "callback", value: "\(callbackScheme)://payment-result")
+            URLQueryItem(name: "complete_url", value: "\(completeScheme)://payment-result")
         ]
 
+        if let callbackUrl, !callbackUrl.isEmpty {
+            queryItems.append(URLQueryItem(name: "callback_url", value: callbackUrl))
+        }
         if let description, !description.isEmpty {
             queryItems.append(URLQueryItem(name: "description", value: description))
         }
