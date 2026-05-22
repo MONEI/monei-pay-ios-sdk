@@ -60,7 +60,11 @@ public final class MoneiPay: @unchecked Sendable {
     ///   - customerEmail: Optional customer email.
     ///   - customerPhone: Optional customer phone.
     ///   - callbackUrl: Optional HTTPS endpoint for the signed webhook on payment completion.
-    ///     Must be `https://`, max 2048 chars. This is the trusted channel — use it for fulfillment.
+    ///     Must be `https://`, max 2048 chars. This is the trusted channel, use it for fulfillment.
+    ///   - orderId: Optional merchant order reference. Used as the payment's orderId so the
+    ///     webhook callback can be reconciled against your POS order. If empty, MONEI generates one.
+    ///   - transactionType: Optional transaction type (SALE, AUTH, REFUND, CAPTURE, CANCEL,
+    ///     PAYOUT, VERIF). Backend validates; invalid values are rejected.
     ///   - completeScheme: Your app's registered URL scheme (e.g. "my-merchant-app").
     ///     MONEI Pay opens `<completeScheme>://payment-result` when the flow ends. UX-only, untrusted.
     ///   - timeout: Timeout in seconds (default: 60). Uses wall-clock time, not Task.sleep.
@@ -74,6 +78,8 @@ public final class MoneiPay: @unchecked Sendable {
         customerEmail: String? = nil,
         customerPhone: String? = nil,
         callbackUrl: String? = nil,
+        orderId: String? = nil,
+        transactionType: String? = nil,
         completeScheme: String,
         timeout: TimeInterval? = nil
     ) async throws -> PaymentResult {
@@ -118,6 +124,8 @@ public final class MoneiPay: @unchecked Sendable {
             customerEmail: customerEmail,
             customerPhone: customerPhone,
             callbackUrl: callbackUrl,
+            orderId: orderId,
+            transactionType: transactionType,
             completeScheme: completeScheme
         ) else {
             throw MoneiPayError.invalidParameters("Failed to build payment URL")
@@ -260,6 +268,8 @@ public final class MoneiPay: @unchecked Sendable {
         customerEmail: String? = nil,
         customerPhone: String? = nil,
         callbackUrl: String? = nil,
+        orderId: String? = nil,
+        transactionType: String? = nil,
         completeScheme: String
     ) -> URL? {
         var components = URLComponents()
@@ -286,6 +296,12 @@ public final class MoneiPay: @unchecked Sendable {
         }
         if let customerPhone, !customerPhone.isEmpty {
             queryItems.append(URLQueryItem(name: "customer_phone", value: customerPhone))
+        }
+        if let orderId, !orderId.isEmpty {
+            queryItems.append(URLQueryItem(name: "order_id", value: orderId))
+        }
+        if let transactionType, !transactionType.isEmpty {
+            queryItems.append(URLQueryItem(name: "transaction_type", value: transactionType))
         }
 
         components.queryItems = queryItems

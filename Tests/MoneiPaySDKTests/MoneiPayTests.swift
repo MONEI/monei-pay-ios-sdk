@@ -66,6 +66,37 @@ final class MoneiPayTests: XCTestCase {
         XCTAssertNil(params["callback_url"])
     }
 
+    // Merchant orderId surfaces as order_id query param for backend reconciliation.
+    // transactionType passes through unvalidated; backend zod enforces enum.
+    func testBuildPaymentURL_emitsOrderIdAndTransactionType() {
+        let url = MoneiPay.buildPaymentURL(
+            token: "tok",
+            amount: 100,
+            callbackUrl: nil,
+            orderId: "qmrid:abc-123",
+            transactionType: "AUTH",
+            completeScheme: "app"
+        )
+        XCTAssertNotNil(url)
+        let params = queryParams(from: url!)
+        XCTAssertEqual(params["order_id"], "qmrid:abc-123")
+        XCTAssertEqual(params["transaction_type"], "AUTH")
+    }
+
+    func testBuildPaymentURL_omitsOrderIdAndTransactionTypeWhenNilOrEmpty() {
+        let url = MoneiPay.buildPaymentURL(
+            token: "tok",
+            amount: 100,
+            orderId: "",
+            transactionType: nil,
+            completeScheme: "app"
+        )
+        XCTAssertNotNil(url)
+        let params = queryParams(from: url!)
+        XCTAssertNil(params["order_id"])
+        XCTAssertNil(params["transaction_type"])
+    }
+
     func testBuildPaymentURL_emitsCompleteUrlNotLegacyCallback() {
         // Negative regression: even with minimal params, NO `callback` key appears.
         let url = MoneiPay.buildPaymentURL(
