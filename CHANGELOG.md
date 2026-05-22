@@ -1,5 +1,12 @@
 # Changelog
 
+# [1.1.0](https://github.com/MONEI/monei-pay-ios-sdk/compare/v1.0.0...v1.1.0) (2026-05-22)
+
+
+### Features
+
+* forward orderId and transactionType to deep-link query items ([5d2522c](https://github.com/MONEI/monei-pay-ios-sdk/commit/5d2522c1f9e8326771dc19c3f995073b2f045359))
+
 # [1.0.0](https://github.com/MONEI/monei-pay-ios-sdk/compare/v0.2.3...v1.0.0) (2026-05-22)
 
 
