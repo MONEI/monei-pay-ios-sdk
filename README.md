@@ -139,6 +139,8 @@ Accepts an NFC payment via MONEI Pay.
 | `customerEmail`  | `String?`       | No       | Customer email                                                                               |
 | `customerPhone`  | `String?`       | No       | Customer phone                                                                               |
 | `callbackUrl`    | `String?`       | No       | HTTPS endpoint for the signed webhook. Trusted channel — use for fulfillment.                |
+| `orderId`         | `String?`       | No       | Merchant order reference. Surfaced in the webhook callback for reconciliation. Max 2048 chars. If omitted, the SDK generates one. |
+| `transactionType` | `String?`       | No       | Optional: `SALE` (default), `AUTH`, `REFUND`, `CAPTURE`, `CANCEL`, `PAYOUT`, `VERIF`. Server-validated.                                              |
 | `completeScheme` | `String`        | Yes      | Your app's registered URL scheme. MONEI Pay opens `<completeScheme>://payment-result` on end |
 | `timeout`        | `TimeInterval?` | No       | Timeout in seconds (default: 60)                                                             |
 
