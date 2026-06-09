@@ -63,6 +63,11 @@ In your app's `Info.plist`, register a custom URL scheme (e.g. your bundle ID):
 </array>
 ```
 
+The SDK launches MONEI Pay via a Universal Link (`https://pay.monei.com/accept-payment`), which opens
+the app directly with **no "Open in MONEI Pay?" prompt**. On MONEI Pay installs that predate Universal
+Link support it transparently falls back to the `monei-pay://` custom scheme (hence the queried scheme
+above is still required). No merchant configuration is needed beyond the steps here.
+
 ### 3. Wire the complete-redirect handler
 
 **SwiftUI:**

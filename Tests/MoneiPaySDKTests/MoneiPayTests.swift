@@ -110,6 +110,56 @@ final class MoneiPayTests: XCTestCase {
         XCTAssertEqual(params["complete_url"], "x://payment-result")
     }
 
+    // MARK: - Universal Link URL Building Tests
+
+    func testBuildUniversalLinkURL_isHttpsPayMoneiAcceptPayment() {
+        let url = MoneiPay.buildUniversalLinkURL(
+            token: "eyJhbGciOiJIUzI1NiJ9.test",
+            amount: 1500,
+            completeScheme: "merchant-demo"
+        )
+
+        XCTAssertNotNil(url)
+        let components = URLComponents(url: url!, resolvingAgainstBaseURL: false)
+        XCTAssertEqual(components?.scheme, "https")
+        XCTAssertEqual(components?.host, "pay.monei.com")
+        XCTAssertEqual(components?.path, "/accept-payment")
+
+        let params = queryParams(from: url!)
+        XCTAssertEqual(params["amount"], "1500")
+        XCTAssertEqual(params["auth_token"], "eyJhbGciOiJIUzI1NiJ9.test")
+        XCTAssertEqual(params["complete_url"], "merchant-demo://payment-result")
+    }
+
+    // The Universal Link and custom-scheme URLs must carry identical query params —
+    // only scheme/host/path differ. Guards against the two builders drifting.
+    func testUniversalLinkAndSchemeURLs_shareIdenticalQueryParams() {
+        let args: (String, Int, String) = ("tok", 2500, "my-app")
+        let universal = MoneiPay.buildUniversalLinkURL(
+            token: args.0,
+            amount: args.1,
+            description: "Order #42",
+            customerName: "Jane Doe",
+            callbackUrl: "https://merchant.example.com/webhook",
+            orderId: "qmrid:abc-123",
+            transactionType: "AUTH",
+            completeScheme: args.2
+        )
+        let scheme = MoneiPay.buildPaymentURL(
+            token: args.0,
+            amount: args.1,
+            description: "Order #42",
+            customerName: "Jane Doe",
+            callbackUrl: "https://merchant.example.com/webhook",
+            orderId: "qmrid:abc-123",
+            transactionType: "AUTH",
+            completeScheme: args.2
+        )
+        XCTAssertNotNil(universal)
+        XCTAssertNotNil(scheme)
+        XCTAssertEqual(queryParams(from: universal!), queryParams(from: scheme!))
+    }
+
     // MARK: - isValidCallbackUrl Tests
 
     func testIsValidCallbackUrl_https_passes() {
