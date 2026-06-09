@@ -32,8 +32,14 @@ public final class MoneiPay: @unchecked Sendable {
     /// Default timeout in seconds for waiting for MONEI Pay callback.
     public static var defaultTimeout: TimeInterval = 60
 
-    /// URL scheme used to open MONEI Pay.
+    /// URL scheme used to open MONEI Pay (fallback for installs without the
+    /// Universal Links entitlement).
     static let moneiPayScheme = "monei-pay"
+
+    /// Host for the MONEI Pay Universal Link. Opening `https://pay.monei.com/accept-payment`
+    /// launches the app directly with no "Open in MONEI Pay?" system prompt, provided the
+    /// installed build carries the `applinks:pay.monei.com` associated-domains entitlement.
+    static let universalLinkHost = "pay.monei.com"
 
     // MARK: - Internal State
 
@@ -115,19 +121,34 @@ public final class MoneiPay: @unchecked Sendable {
         }
         #endif
 
-        // Build MONEI Pay URL
-        guard let url = buildPaymentURL(
-            token: token,
-            amount: amount,
-            description: description,
-            customerName: customerName,
-            customerEmail: customerEmail,
-            customerPhone: customerPhone,
-            callbackUrl: callbackUrl,
-            orderId: orderId,
-            transactionType: transactionType,
-            completeScheme: completeScheme
-        ) else {
+        // Build both launch URLs: the Universal Link (no system prompt) and the
+        // custom-scheme fallback (works on installs without the entitlement).
+        guard
+            let universalURL = buildUniversalLinkURL(
+                token: token,
+                amount: amount,
+                description: description,
+                customerName: customerName,
+                customerEmail: customerEmail,
+                customerPhone: customerPhone,
+                callbackUrl: callbackUrl,
+                orderId: orderId,
+                transactionType: transactionType,
+                completeScheme: completeScheme
+            ),
+            let schemeURL = buildPaymentURL(
+                token: token,
+                amount: amount,
+                description: description,
+                customerName: customerName,
+                customerEmail: customerEmail,
+                customerPhone: customerPhone,
+                callbackUrl: callbackUrl,
+                orderId: orderId,
+                transactionType: transactionType,
+                completeScheme: completeScheme
+            )
+        else {
             throw MoneiPayError.invalidParameters("Failed to build payment URL")
         }
 
@@ -148,7 +169,14 @@ public final class MoneiPay: @unchecked Sendable {
             // Open MONEI Pay
             Task { @MainActor in
                 #if canImport(UIKit)
-                let opened = await UIApplication.shared.open(url)
+                // Try the Universal Link first: with `universalLinksOnly` iOS opens it ONLY if an
+                // installed app claims pay.monei.com (a build with the associated-domains entitlement),
+                // with no "Open in MONEI Pay?" prompt. Older installs return false without opening
+                // Safari, so we fall back to the custom scheme (which still works, prompt and all).
+                var opened = await UIApplication.shared.open(universalURL, options: [.universalLinksOnly: true])
+                if !opened {
+                    opened = await UIApplication.shared.open(schemeURL)
+                }
                 if !opened {
                     resumePendingContinuation(with: .failure(MoneiPayError.failedToOpen))
                     return
@@ -259,8 +287,9 @@ public final class MoneiPay: @unchecked Sendable {
         return url.lowercased().hasPrefix("https://")
     }
 
-    /// Build the MONEI Pay deep link URL.
-    static func buildPaymentURL(
+    /// Shared query items for both the Universal Link and the custom-scheme launch URL.
+    /// The two URLs differ only in scheme/host/path; the params are identical.
+    static func buildQueryItems(
         token: String,
         amount: Int,
         description: String? = nil,
@@ -271,11 +300,7 @@ public final class MoneiPay: @unchecked Sendable {
         orderId: String? = nil,
         transactionType: String? = nil,
         completeScheme: String
-    ) -> URL? {
-        var components = URLComponents()
-        components.scheme = moneiPayScheme
-        components.host = "accept-payment"
-
+    ) -> [URLQueryItem] {
         var queryItems = [
             URLQueryItem(name: "amount", value: String(amount)),
             URLQueryItem(name: "auth_token", value: token),
@@ -304,7 +329,71 @@ public final class MoneiPay: @unchecked Sendable {
             queryItems.append(URLQueryItem(name: "transaction_type", value: transactionType))
         }
 
-        components.queryItems = queryItems
+        return queryItems
+    }
+
+    /// Build the MONEI Pay custom-scheme deep link URL (`monei-pay://accept-payment?...`).
+    /// Fallback for installs without the Universal Links entitlement.
+    static func buildPaymentURL(
+        token: String,
+        amount: Int,
+        description: String? = nil,
+        customerName: String? = nil,
+        customerEmail: String? = nil,
+        customerPhone: String? = nil,
+        callbackUrl: String? = nil,
+        orderId: String? = nil,
+        transactionType: String? = nil,
+        completeScheme: String
+    ) -> URL? {
+        var components = URLComponents()
+        components.scheme = moneiPayScheme
+        components.host = "accept-payment"
+        components.queryItems = buildQueryItems(
+            token: token,
+            amount: amount,
+            description: description,
+            customerName: customerName,
+            customerEmail: customerEmail,
+            customerPhone: customerPhone,
+            callbackUrl: callbackUrl,
+            orderId: orderId,
+            transactionType: transactionType,
+            completeScheme: completeScheme
+        )
+        return components.url
+    }
+
+    /// Build the MONEI Pay Universal Link URL (`https://pay.monei.com/accept-payment?...`).
+    /// Preferred launch URL: opens the app with no system prompt when the entitlement is present.
+    static func buildUniversalLinkURL(
+        token: String,
+        amount: Int,
+        description: String? = nil,
+        customerName: String? = nil,
+        customerEmail: String? = nil,
+        customerPhone: String? = nil,
+        callbackUrl: String? = nil,
+        orderId: String? = nil,
+        transactionType: String? = nil,
+        completeScheme: String
+    ) -> URL? {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = universalLinkHost
+        components.path = "/accept-payment"
+        components.queryItems = buildQueryItems(
+            token: token,
+            amount: amount,
+            description: description,
+            customerName: customerName,
+            customerEmail: customerEmail,
+            customerPhone: customerPhone,
+            callbackUrl: callbackUrl,
+            orderId: orderId,
+            transactionType: transactionType,
+            completeScheme: completeScheme
+        )
         return components.url
     }
 
