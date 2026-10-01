@@ -201,8 +201,40 @@ final class MoneiPayTests: XCTestCase {
         let url = URL(string: "merchant-demo://payment-result?success=false&error=PAYMENT_FAILED")!
         let result = PaymentResult(from: url)
 
-        // PaymentResult init returns nil for failed payments (handled separately by handleCompleteRedirect)
+        // Older MONEI Pay versions send a decline without transaction_id: no result to parse.
         XCTAssertNil(result)
+    }
+
+    func testPaymentResult_parsesPaymentFields() {
+        let url = URL(string: "app://payment-result?success=true&transaction_id=tx_1&order_id=ord_1&currency=EUR&status=SUCCEEDED&status_code=E000&status_message=Transaction%20approved&authorization_code=A1B2C3&last4=4242&card_type=debit&card_country=ES&masked_card_number=****9999")!
+        let result = PaymentResult(from: url)
+
+        XCTAssertEqual(result?.orderId, "ord_1")
+        XCTAssertEqual(result?.currency, "EUR")
+        XCTAssertEqual(result?.status, "SUCCEEDED")
+        XCTAssertEqual(result?.statusCode, "E000")
+        XCTAssertEqual(result?.statusMessage, "Transaction approved")
+        XCTAssertEqual(result?.authorizationCode, "A1B2C3")
+        // An explicit last4 wins over the masked number.
+        XCTAssertEqual(result?.last4, "4242")
+        XCTAssertEqual(result?.cardType, "debit")
+        XCTAssertEqual(result?.cardCountry, "ES")
+    }
+
+    // Older MONEI Pay versions send only masked_card_number and no new fields.
+    func testPaymentResult_missingNewFieldsAreNil_last4FromMaskedNumber() {
+        let url = URL(string: "app://payment-result?success=true&transaction_id=tx_1&masked_card_number=****1234&status_code=")!
+        let result = PaymentResult(from: url)
+
+        XCTAssertEqual(result?.last4, "1234")
+        XCTAssertNil(result?.orderId)
+        XCTAssertNil(result?.currency)
+        XCTAssertNil(result?.status)
+        XCTAssertNil(result?.statusCode)
+        XCTAssertNil(result?.statusMessage)
+        XCTAssertNil(result?.authorizationCode)
+        XCTAssertNil(result?.cardType)
+        XCTAssertNil(result?.cardCountry)
     }
 
     func testPaymentResult_missingTransactionId() {
@@ -226,6 +258,33 @@ final class MoneiPayTests: XCTestCase {
         let url = URL(string: "merchant-demo://payment-result?success=true&transaction_id=tx_1")!
         let handled = MoneiPay.handleCompleteRedirect(url: url)
         XCTAssertFalse(handled)
+    }
+
+    // A decline still throws paymentFailed, and the decline data is exposed for the result screen.
+    func testHandleCompleteRedirect_declineExposesDeclinedPayment() async throws {
+        let error = try await runPayment(redirect: "app://payment-result?success=false&error=PAYMENT_FAILED&transaction_id=tx_9&order_id=ord_9&status=FAILED&status_code=E301&status_message=Insufficient%20funds")
+
+        guard case .paymentFailed = error as? MoneiPayError else {
+            return XCTFail("Expected paymentFailed, got \(String(describing: error))")
+        }
+        let declined = try XCTUnwrap(MoneiPay.lastDeclinedPayment)
+        XCTAssertFalse(declined.success)
+        XCTAssertEqual(declined.transactionId, "tx_9")
+        XCTAssertEqual(declined.orderId, "ord_9")
+        XCTAssertEqual(declined.status, "FAILED")
+        XCTAssertEqual(declined.statusCode, "E301")
+        XCTAssertEqual(declined.statusMessage, "Insufficient funds")
+    }
+
+    // A cancel is not a decline: it must not leave decline data from this or an earlier payment.
+    func testHandleCompleteRedirect_cancelLeavesNoDeclinedPayment() async throws {
+        _ = try await runPayment(redirect: "app://payment-result?success=false&error=PAYMENT_FAILED&transaction_id=tx_old")
+        let error = try await runPayment(redirect: "app://payment-result?success=false&error=CANCELLED&transaction_id=tx_1")
+
+        guard case .paymentCancelled = error as? MoneiPayError else {
+            return XCTFail("Expected paymentCancelled, got \(String(describing: error))")
+        }
+        XCTAssertNil(MoneiPay.lastDeclinedPayment)
     }
 
     // MARK: - Error Code Mapping
@@ -435,6 +494,28 @@ final class MoneiPayTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// Start a payment, deliver `redirect` as the complete-redirect URL, return the thrown error.
+    private func runPayment(redirect: String) async throws -> Error? {
+        let task = Task { try await MoneiPay.acceptPayment(token: "tok", amount: 100, completeScheme: "app") }
+        let url = try XCTUnwrap(URL(string: redirect))
+        var attempts = 0
+        while !MoneiPay.handleCompleteRedirect(url: url) {
+            attempts += 1
+            if attempts > 1000 {
+                task.cancel()
+                XCTFail("Payment never became pending")
+                return nil
+            }
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+        do {
+            _ = try await task.value
+            return nil
+        } catch {
+            return error
+        }
+    }
 
     private func queryParams(from url: URL) -> [String: String] {
         URLComponents(url: url, resolvingAgainstBaseURL: false)?
