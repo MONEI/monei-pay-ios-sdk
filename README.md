@@ -124,10 +124,16 @@ do {
     // User cancelled
 } catch MoneiPayError.paymentTimeout {
     // MONEI Pay didn't respond in time
+} catch MoneiPayError.paymentFailed {
+    // Declined. Show the decline reason when MONEI Pay sends it.
+    let declined = MoneiPay.lastDeclinedPayment
+    print("Payment declined: \(declined?.statusMessage ?? "no reason")")
 } catch {
     print("Payment failed: \(error.localizedDescription)")
 }
 ```
+
+> **Important:** `PaymentResult` and `MoneiPay.lastDeclinedPayment` come from the complete redirect. Use them only to show the result. Before fulfillment, confirm the payment on your server with the signed webhook (`callbackUrl`) or `GET /payments/{id}`.
 
 ## API Reference
 
@@ -155,6 +161,10 @@ Returns `PaymentResult`. Throws `MoneiPayError`.
 
 Handle incoming complete-redirect URL from MONEI Pay. Returns `true` if the URL was handled.
 
+### `MoneiPay.lastDeclinedPayment`
+
+`PaymentResult?`. The declined payment of the most recent `acceptPayment` call. Read it when `acceptPayment` throws `.paymentFailed`. It is `nil` when MONEI Pay sends no payment data (older MONEI Pay versions). A new `acceptPayment` call resets it. Display data only.
+
 ### `PaymentResult`
 
 | Property           | Type      | Description                         |
@@ -164,6 +174,17 @@ Handle incoming complete-redirect URL from MONEI Pay. Returns `true` if the URL 
 | `amount`           | `Int?`    | Amount in cents                     |
 | `cardBrand`        | `String?` | Card brand (visa, mastercard, etc.) |
 | `maskedCardNumber` | `String?` | Masked card number (****1234)       |
+| `orderId`          | `String?` | Merchant order reference            |
+| `currency`         | `String?` | ISO 4217 currency code (EUR)        |
+| `status`           | `String?` | MONEI payment status (SUCCEEDED, AUTHORIZED, FAILED, etc.) |
+| `statusCode`       | `String?` | MONEI status code (E000, E301, etc.) |
+| `statusMessage`    | `String?` | Status message (Insufficient funds) |
+| `authorizationCode`| `String?` | Issuer authorization code. Approved payments only. |
+| `last4`            | `String?` | Last 4 digits of the card number    |
+| `cardType`         | `String?` | credit, debit or prepaid            |
+| `cardCountry`      | `String?` | ISO 3166-1 alpha-2 card country (ES) |
+
+The approval comes only from `success`. The other fields are display data. They are `nil` when MONEI Pay does not send them (older MONEI Pay versions).
 
 ### `MoneiPayError`
 

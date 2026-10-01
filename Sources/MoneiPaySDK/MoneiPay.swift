@@ -52,7 +52,21 @@ public final class MoneiPay: @unchecked Sendable {
     /// Timestamp when the current payment started (wall clock for timeout).
     private static var paymentStartDate: Date?
 
+    private static var declinedPayment: PaymentResult?
+
     private init() {}
+
+    /// The declined payment of the most recent `acceptPayment` call.
+    ///
+    /// Read it when `acceptPayment` throws `MoneiPayError.paymentFailed` to show the decline
+    /// reason (`statusCode`, `statusMessage`). It is `nil` when MONEI Pay sent no payment data
+    /// (for example, older MONEI Pay versions). A new `acceptPayment` call resets it.
+    /// Display data only: confirm the payment status on your server before you act on it.
+    public static var lastDeclinedPayment: PaymentResult? {
+        lock.lock()
+        defer { lock.unlock() }
+        return declinedPayment
+    }
 
     // MARK: - Public API
 
@@ -164,6 +178,7 @@ public final class MoneiPay: @unchecked Sendable {
             }
             pendingContinuation = continuation
             paymentStartDate = Date()
+            declinedPayment = nil
             lock.unlock()
 
             // Open MONEI Pay
@@ -225,8 +240,12 @@ public final class MoneiPay: @unchecked Sendable {
         } ?? [:]
 
         if params["success"] == "false" {
-            let errorReason = params["error"]
-            resumePendingContinuation(with: .failure(mapErrorCode(errorReason)))
+            let error = mapErrorCode(params["error"])
+            var declined: PaymentResult?
+            if case .paymentFailed = error {
+                declined = PaymentResult(from: url)
+            }
+            resumePendingContinuation(with: .failure(error), declined: declined)
             return true
         }
 
@@ -442,7 +461,11 @@ public final class MoneiPay: @unchecked Sendable {
     }
 
     /// Thread-safe resume of the pending continuation.
-    private static func resumePendingContinuation(with result: Result<PaymentResult, Error>) {
+    /// `declined` is stored under the same lock, so `lastDeclinedPayment` is set before `acceptPayment` throws.
+    private static func resumePendingContinuation(
+        with result: Result<PaymentResult, Error>,
+        declined: PaymentResult? = nil
+    ) {
         lock.lock()
         guard let continuation = pendingContinuation else {
             lock.unlock()
@@ -450,6 +473,7 @@ public final class MoneiPay: @unchecked Sendable {
         }
         pendingContinuation = nil
         paymentStartDate = nil
+        declinedPayment = declined
         lock.unlock()
 
         continuation.resume(with: result)
