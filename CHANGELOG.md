@@ -1,9 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Features
-
 * `PaymentResult` has new optional fields: `orderId`, `currency`, `status`, `statusCode`, `statusMessage`, `authorizationCode`, `last4`, `cardType` and `cardCountry`. The SDK reads them from the complete redirect. If the redirect has no `last4`, the SDK takes the last 4 digits from `masked_card_number`. The public `PaymentResult` init has new parameters with default values, so your code continues to compile.
 * New `MoneiPay.lastDeclinedPayment`. When `acceptPayment` throws `MoneiPayError.paymentFailed`, this property gives the declined payment, with `statusCode` and `statusMessage`. The `MoneiPayError` cases do not change, so your `switch` and `catch` code continues to compile.
 * The new data needs a MONEI Pay version that sends it. With older versions, the new fields and `lastDeclinedPayment` are `nil`.
